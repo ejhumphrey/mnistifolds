@@ -31,12 +31,12 @@ def pwrank(verbose=False):
         name='learning_rate',
         shape=None)
 
-    alpha = optimus.Input(
-        name='alpha',
+    margin_diff = optimus.Input(
+        name='margin_diff',
         shape=None)
 
-    margin = optimus.Input(
-        name='margin',
+    margin_same = optimus.Input(
+        name='margin_same',
         shape=None)
 
     # 1.2 Create Nodes
@@ -61,18 +61,18 @@ def pwrank(verbose=False):
 
     param_nodes = [layer0, layer1, layer2]
     # Create two copies
-    nodes_same = [l.clone(l.name + "_2") for l in param_nodes]
-    nodes_diff = [l.clone(l.name + "_3") for l in param_nodes]
+    nodes_same = [l.clone(l.name + "_same") for l in param_nodes]
+    nodes_diff = [l.clone(l.name + "_diff") for l in param_nodes]
 
     # 1.1 Create Losses
     cost_sim = optimus.Euclidean(name='cost_sim')
     cost_diff = optimus.Euclidean(name='cost_diff')
-    criterion = optimus.PairwiseRank(name='rank')
+    criterion = optimus.ContrastiveMargin(name='contrastive')
 
     loss_nodes = [cost_sim, cost_diff, criterion]
 
     # 1.2 Define outputs
-    embedding = optimus.Output(name='embedding')
+    z_out = optimus.Output(name='z_out')
     loss = optimus.Output(name='loss')
 
     # 2. Define Edges
@@ -80,7 +80,7 @@ def pwrank(verbose=False):
         (x_in, layer0.input),
         (layer0.output, layer1.input),
         (layer1.output, layer2.input),
-        (layer2.output, embedding)]
+        (layer2.output, z_out)]
 
     trainer_edges = optimus.ConnectionManager(
         base_edges + [
@@ -96,8 +96,8 @@ def pwrank(verbose=False):
             (nodes_diff[2].output, cost_diff.input_b),
             (cost_sim.output, criterion.cost_sim),
             (cost_diff.output, criterion.cost_diff),
-            (alpha, criterion.alpha),
-            (margin, criterion.margin),
+            (margin_same, criterion.margin_sim),
+            (margin_diff, criterion.margin_diff),
             (criterion.output, loss)])
 
     update_manager = optimus.ConnectionManager(
@@ -106,10 +106,11 @@ def pwrank(verbose=False):
 
     trainer = optimus.Graph(
         name='mnist_trainer',
-        inputs=[x_in, x_same, x_diff, learning_rate, alpha, margin],
+        inputs=[x_in, x_same, x_diff,
+                learning_rate, margin_same, margin_diff],
         nodes=param_nodes + nodes_same + nodes_diff + loss_nodes,
         connections=trainer_edges.connections,
-        outputs=[loss, embedding],
+        outputs=[loss, z_out],
         loss=loss,
         updates=update_manager.connections,
         verbose=verbose)
@@ -124,7 +125,7 @@ def pwrank(verbose=False):
         inputs=[x_in],
         nodes=param_nodes,
         connections=predictor_edges.connections,
-        outputs=[embedding],
+        outputs=[z_out],
         verbose=verbose)
 
     return trainer, predictor
