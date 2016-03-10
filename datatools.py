@@ -75,3 +75,7 @@ def neighbor_stream(x_obs, nearest_neighbors):
         if count >= len(x_obs):
             count = 0
             np.random.shuffle(idx)
+
+
+def generate_imagename(idx, y_true):
+    return "{:06d}-{}.png".format(idx, y_true)
